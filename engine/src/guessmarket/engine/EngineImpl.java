@@ -6,6 +6,7 @@ import guessmarket.engine.dto.OptionStateDto;
 import guessmarket.engine.dto.PurchaseResultDto;
 import guessmarket.engine.dto.TradeDto;
 import guessmarket.engine.exception.InvalidFileException;
+import guessmarket.engine.exception.InvalidRequestException;
 import guessmarket.engine.exception.StateFileException;
 import guessmarket.engine.model.Event;
 import guessmarket.engine.model.EventOption;
@@ -44,19 +45,19 @@ public class EngineImpl implements GuessMarketEngine
     @Override
     public List<EventDto> getAllEvents()
         {
-        return toEventDtos(market.getEvents());
+        return toEventDtos(getMarket().getEvents());
     }
 
     @Override
     public List<EventDto> getActiveEvents() 
         {
-        return toEventDtos(market.getActiveEvents());
+        return toEventDtos(getMarket().getActiveEvents());
     }
 
     @Override
     public EventStateDto getEventState(int eventId) 
         {
-        Event event = market.findById(eventId);
+        Event event = findEvent(eventId);
 
         List<OptionStateDto> options = new ArrayList<OptionStateDto>();
         for (int i = 0; i < event.getOptions().size(); i++)
@@ -86,7 +87,13 @@ public class EngineImpl implements GuessMarketEngine
     @Override
     public PurchaseResultDto buyShares(int eventId, int optionIndex, int quantity) 
         {
-        Event event = market.findById(eventId);
+        Event event = findEvent(eventId);
+        checkOption(event, optionIndex);
+        checkOpen(event);
+        if (quantity <= 0)
+        {
+            throw new InvalidRequestException("The amount of shares has to be bigger than 0");
+        }
         Trade trade = event.buyShares(optionIndex, quantity);
         return new PurchaseResultDto(trade.getSharesCost(), trade.getCommission());
     }
@@ -94,13 +101,17 @@ public class EngineImpl implements GuessMarketEngine
     @Override
     public void closeEvent(int eventId, int optionIndex)
         {
-        market.findById(eventId).close(optionIndex);
+        Event event = findEvent(eventId);
+        checkOption(event, optionIndex);
+        checkOpen(event);
+
+        event.close(optionIndex);
     }
 
     @Override
     public void saveState(String path) throws StateFileException
         {
-        stateManager.save(market, path);
+        stateManager.save(getMarket(), path);
     }
 
     @Override
@@ -108,7 +119,41 @@ public class EngineImpl implements GuessMarketEngine
         {
         market = stateManager.load(path);
     }
+    private Market getMarket()
+    {
+        if (market == null)
+        {
+            throw new InvalidRequestException("There is no events file in the system");
+        }
+        return market;
+    }
 
+    private Event findEvent(int eventId)
+    {
+        Event event = getMarket().findById(eventId);
+        if (event == null)
+        {
+            throw new InvalidRequestException("There is no event with the number " + eventId);
+        }
+        return event;
+    }
+
+    private void checkOption(Event event, int optionIndex)
+    {
+        if (optionIndex < 0 || optionIndex >= event.getOptions().size())
+        {
+            throw new InvalidRequestException("The event '" + event.getName()
+                    + "' does not have an option number " + (optionIndex + 1));
+        }
+    }
+
+    private void checkOpen(Event event)
+    {
+        if (!event.isActive())
+        {
+            throw new InvalidRequestException("The event '" + event.getName() + "' is already closed");
+        }
+    }
     private List<EventDto> toEventDtos(List<Event> events)
         {
         List<EventDto> eventDtos = new ArrayList<EventDto>();
