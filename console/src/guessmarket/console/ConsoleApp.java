@@ -5,6 +5,7 @@ import guessmarket.engine.dto.EventDto;
 import guessmarket.engine.dto.EventStateDto;
 import guessmarket.engine.dto.PurchaseResultDto;
 import guessmarket.engine.exception.InvalidFileException;
+import guessmarket.engine.exception.InvalidRequestException;
 import guessmarket.engine.exception.StateFileException;
 
 import java.util.List;
@@ -37,7 +38,14 @@ public class ConsoleApp
             int number = inputReader.readNumberInRange("Please choose an option (1 - " + MenuOption.values().length + "): ",
                     1, MenuOption.values().length);
             choice = MenuOption.values()[number - 1];
-            handle(choice);
+            try
+            {
+                handle(choice);
+            }
+            catch (InvalidRequestException e)
+            {
+                printer.printMessage("The action was not done - " + e.getMessage());
+            }
         }
     }
 
