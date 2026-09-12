@@ -10,6 +10,7 @@ import guessmarket.engine.dto.OrderDto;
 import guessmarket.engine.dto.ParticipantDto;
 import guessmarket.engine.dto.ParticipationDto;
 import guessmarket.engine.dto.TradeDto;
+import guessmarket.engine.dto.TradeResultDto;
 import guessmarket.engine.dto.UserDto;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
@@ -21,10 +22,14 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ChoiceDialog;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.Spinner;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
+import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.HBox;
@@ -34,9 +39,12 @@ import javafx.stage.Stage;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -61,6 +69,10 @@ public class MainController {
 
     private VBox eventDetailPane;
     private VBox userDetailPane;
+
+    private Integer selectedEventId;
+    private String selectedEventMethod;
+    private String selectedUserName;
 
     public void setEngine(GuessMarketEngine engine) {
         this.engine = engine;
@@ -126,6 +138,9 @@ public class MainController {
         loadButton.setDisable(false);
         filePathLabel.setText(file.getAbsolutePath());
 
+        selectedEventId = null;
+        selectedEventMethod = null;
+        selectedUserName = null;
         eventDetailPane.getChildren().clear();
         userDetailPane.getChildren().clear();
 
@@ -148,6 +163,24 @@ public class MainController {
                 ? error.getMessage()
                 : "Unknown error while loading the file.";
         showError("The file was not loaded", message);
+    }
+
+    /** Re-pulls everything from the engine after a trading action and redraws whatever is currently shown. */
+    private void refreshAfterAction() {
+        List<EventDto> events = engine.getAllEvents();
+        eventsData.setAll(events.stream().map(EventRow::new).collect(Collectors.toList()));
+
+        List<UserDto> users = engine.getAllUsers();
+        usersData.setAll(users.stream().map(UserRow::new).collect(Collectors.toList()));
+
+        if (selectedEventId != null) {
+            eventDetailPane.getChildren().clear();
+            renderEventDetail();
+        }
+        if (selectedUserName != null) {
+            userDetailPane.getChildren().clear();
+            renderUserDetail();
+        }
     }
 
     // ----- events tab -----
@@ -184,8 +217,17 @@ public class MainController {
         eventDetailPane = new VBox(10);
         eventDetailPane.setPadding(new Insets(10, 0, 0, 0));
 
-        table.getSelectionModel().selectedItemProperty()
-                .addListener((obs, oldRow, newRow) -> showEventDetails(newRow));
+        table.getSelectionModel().selectedItemProperty().addListener((obs, oldRow, newRow) -> {
+            eventDetailPane.getChildren().clear();
+            if (newRow == null) {
+                selectedEventId = null;
+                selectedEventMethod = null;
+                return;
+            }
+            selectedEventId = newRow.getId();
+            selectedEventMethod = newRow.getMethodTypeRaw();
+            renderEventDetail();
+        });
 
         eventsContainer.getChildren().addAll(methodRow, statusRow, commissionRow, table, eventDetailPane);
         eventsContainer.setSpacing(8);
@@ -232,15 +274,14 @@ public class MainController {
         return result;
     }
 
-    private void showEventDetails(EventRow row) {
-        eventDetailPane.getChildren().clear();
-        if (row == null) {
+    private void renderEventDetail() {
+        if (selectedEventId == null) {
             return;
         }
-        if ("LMSR".equals(row.getMethodTypeRaw())) {
-            eventDetailPane.getChildren().add(buildLmsrDetail(row.getId()));
+        if ("LMSR".equals(selectedEventMethod)) {
+            eventDetailPane.getChildren().add(buildLmsrDetail(selectedEventId));
         } else {
-            eventDetailPane.getChildren().add(buildOrderBookDetail(row.getId()));
+            eventDetailPane.getChildren().add(buildOrderBookDetail(selectedEventId));
         }
     }
 
@@ -423,21 +464,23 @@ public class MainController {
         userDetailPane = new VBox(10);
         userDetailPane.setPadding(new Insets(10, 0, 0, 0));
 
-        table.getSelectionModel().selectedItemProperty()
-                .addListener((obs, oldRow, newRow) -> showUserDetails(newRow == null ? null : newRow.getName()));
+        table.getSelectionModel().selectedItemProperty().addListener((obs, oldRow, newRow) -> {
+            userDetailPane.getChildren().clear();
+            selectedUserName = newRow == null ? null : newRow.getName();
+            renderUserDetail();
+        });
 
         usersContainer.getChildren().addAll(table, userDetailPane);
         usersContainer.setSpacing(8);
         usersContainer.setPadding(new Insets(10));
     }
 
-    private void showUserDetails(String userName) {
-        userDetailPane.getChildren().clear();
-        if (userName == null) {
+    private void renderUserDetail() {
+        if (selectedUserName == null) {
             return;
         }
+        UserDto user = engine.getUser(selectedUserName);
 
-        UserDto user = engine.getUser(userName);
         Label header = new Label(String.format(Locale.US, "%s    Balance: %.2f    Blocked: %s",
                 user.getName(), user.getBalance(), user.isBlocked() ? "Yes" : "No"));
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
@@ -449,7 +492,7 @@ public class MainController {
                 .collect(Collectors.joining(", "));
         Label mmLabel = new Label("Market maker of: " + mmText);
 
-        List<ParticipationDto> participations = engine.getParticipations(userName);
+        List<ParticipationDto> participations = engine.getParticipations(selectedUserName);
         Label partHeader = new Label("Participating in " + participations.size() + " event(s):");
 
         VBox partsBox = new VBox(12);
@@ -457,7 +500,9 @@ public class MainController {
             partsBox.getChildren().add(buildParticipationBlock(participation));
         }
 
-        userDetailPane.getChildren().addAll(header, mmLabel, partHeader, partsBox);
+        VBox actions = buildActionsSection(selectedUserName, user);
+
+        userDetailPane.getChildren().addAll(header, mmLabel, partHeader, partsBox, actions);
     }
 
     private VBox buildParticipationBlock(ParticipationDto participation) {
@@ -502,6 +547,185 @@ public class MainController {
         }
 
         return box;
+    }
+
+    // ----- trading actions -----
+
+    private VBox buildActionsSection(String userName, UserDto user) {
+        VBox actions = new VBox(8);
+        Label header = new Label("Actions:");
+        header.setStyle("-fx-font-weight: bold;");
+        actions.getChildren().add(header);
+
+        for (Integer eventId : user.getMarketMakerEventIds()) {
+            EventDto event = engine.getEvent(eventId);
+            HBox row = new HBox(8);
+            row.setAlignment(Pos.CENTER_LEFT);
+            row.getChildren().add(new Label(event.getName() + " (#" + eventId + ") - " + event.getStatus()));
+
+            if ("Not started".equals(event.getStatus())) {
+                Button openButton = new Button("Open event");
+                openButton.setOnAction(e -> handleOpenEvent(userName, eventId));
+                row.getChildren().add(openButton);
+            } else if ("Active".equals(event.getStatus())) {
+                Button closeButton = new Button("Close event");
+                closeButton.setOnAction(e -> handleCloseEvent(userName, eventId));
+                row.getChildren().add(closeButton);
+            }
+            actions.getChildren().add(row);
+        }
+
+        List<EventDto> activeEvents = engine.getAllEvents().stream()
+                .filter(ev -> "Active".equals(ev.getStatus()))
+                .collect(Collectors.toList());
+
+        if (!activeEvents.isEmpty()) {
+            Map<String, EventDto> lookup = new HashMap<>();
+            List<String> labels = new ArrayList<>();
+            for (EventDto ev : activeEvents) {
+                String label = ev.getName() + " (#" + ev.getId() + ")";
+                labels.add(label);
+                lookup.put(label, ev);
+            }
+
+            Label tradeHeader = new Label("Trade in an active event:");
+            ComboBox<String> eventCombo = new ComboBox<>(FXCollections.observableArrayList(labels));
+            VBox tradeControls = new VBox(8);
+
+            eventCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+                tradeControls.getChildren().clear();
+                if (newVal == null) {
+                    return;
+                }
+                EventDto event = lookup.get(newVal);
+                if ("LMSR".equals(event.getMethodType())) {
+                    tradeControls.getChildren().add(buildLmsrTradeForm(userName, event));
+                } else {
+                    tradeControls.getChildren().add(buildOrderBookTradeForm(userName, event));
+                }
+            });
+
+            actions.getChildren().addAll(tradeHeader, eventCombo, tradeControls);
+        }
+
+        return actions;
+    }
+
+    private HBox buildLmsrTradeForm(String userName, EventDto event) {
+        HBox form = new HBox(8);
+        form.setAlignment(Pos.CENTER_LEFT);
+
+        ComboBox<String> optionCombo = new ComboBox<>(FXCollections.observableArrayList(event.getOptionNames()));
+        optionCombo.getSelectionModel().selectFirst();
+
+        Spinner<Integer> quantitySpinner = new Spinner<>(1, 1_000_000, 1);
+        quantitySpinner.setEditable(true);
+
+        Button buyButton = new Button("Buy");
+        buyButton.setOnAction(e -> {
+            int optionIndex = event.getOptionNames().indexOf(optionCombo.getValue());
+            int quantity = quantitySpinner.getValue();
+            try {
+                TradeResultDto result = engine.buyShares(userName, event.getId(), optionIndex, quantity);
+                refreshAfterAction();
+                StringBuilder message = new StringBuilder(String.format(Locale.US,
+                        "Paid %.2f in total.", result.getTotalAmount() + result.getTotalCommission()));
+                if (!result.getBlockedUsers().isEmpty()) {
+                    message.append("\n").append(String.join(", ", result.getBlockedUsers()))
+                            .append(" went into a negative balance and is now blocked.");
+                }
+                showInfo("Purchase completed", message.toString());
+            } catch (RuntimeException ex) {
+                showError("Purchase failed", ex.getMessage());
+            }
+        });
+
+        form.getChildren().addAll(new Label("Option:"), optionCombo, new Label("Quantity:"), quantitySpinner, buyButton);
+        return form;
+    }
+
+    private HBox buildOrderBookTradeForm(String userName, EventDto event) {
+        HBox form = new HBox(8);
+        form.setAlignment(Pos.CENTER_LEFT);
+
+        ComboBox<String> optionCombo = new ComboBox<>(FXCollections.observableArrayList(event.getOptionNames()));
+        optionCombo.getSelectionModel().selectFirst();
+
+        ComboBox<String> sideCombo = new ComboBox<>(FXCollections.observableArrayList("Buy", "Sell"));
+        sideCombo.getSelectionModel().selectFirst();
+
+        Spinner<Integer> quantitySpinner = new Spinner<>(1, 1_000_000, 1);
+        quantitySpinner.setEditable(true);
+
+        TextField priceField = new TextField();
+        priceField.setPromptText("Price");
+        priceField.setPrefWidth(70);
+
+        Button submitButton = new Button("Submit order");
+        submitButton.setOnAction(e -> {
+            int optionIndex = event.getOptionNames().indexOf(optionCombo.getValue());
+            int quantity = quantitySpinner.getValue();
+            double price;
+            try {
+                price = Double.parseDouble(priceField.getText().trim());
+            } catch (NumberFormatException nfe) {
+                showError("Invalid price", "Please enter a valid number for the price");
+                return;
+            }
+            try {
+                TradeResultDto result = engine.submitOrder(userName, event.getId(), optionIndex,
+                        sideCombo.getValue(), quantity, price);
+                refreshAfterAction();
+                StringBuilder message = new StringBuilder("Filled: " + result.getFilledQuantity());
+                if (result.getRestingQuantity() > 0) {
+                    message.append(", resting in the book: ").append(result.getRestingQuantity());
+                }
+                if (result.isMinted()) {
+                    message.append(" (mint occurred)");
+                }
+                if (!result.getBlockedUsers().isEmpty()) {
+                    message.append("\n").append(String.join(", ", result.getBlockedUsers()))
+                            .append(" went into a negative balance and is now blocked.");
+                }
+                showInfo("Order submitted", message.toString());
+            } catch (RuntimeException ex) {
+                showError("Order failed", ex.getMessage());
+            }
+        });
+
+        form.getChildren().addAll(new Label("Option:"), optionCombo, new Label("Side:"), sideCombo,
+                new Label("Qty:"), quantitySpinner, new Label("Price:"), priceField, submitButton);
+        return form;
+    }
+
+    private void handleOpenEvent(String userName, int eventId) {
+        try {
+            engine.openEvent(userName, eventId);
+            refreshAfterAction();
+            showInfo("Event opened", "The event was opened successfully.");
+        } catch (RuntimeException ex) {
+            showError("Could not open the event", ex.getMessage());
+        }
+    }
+
+    private void handleCloseEvent(String userName, int eventId) {
+        EventDto event = engine.getEvent(eventId);
+        ChoiceDialog<String> dialog = new ChoiceDialog<>(event.getOptionNames().get(0), event.getOptionNames());
+        dialog.setTitle("Close event");
+        dialog.setHeaderText("Choose the winning option for '" + event.getName() + "'");
+        dialog.setContentText("Winning option:");
+
+        Optional<String> result = dialog.showAndWait();
+        result.ifPresent(winner -> {
+            int optionIndex = event.getOptionNames().indexOf(winner);
+            try {
+                engine.closeEvent(userName, eventId, optionIndex);
+                refreshAfterAction();
+                showInfo("Event closed", "The event was closed. Winning option: " + winner);
+            } catch (RuntimeException ex) {
+                showError("Could not close the event", ex.getMessage());
+            }
+        });
     }
 
     // ----- alerts -----
