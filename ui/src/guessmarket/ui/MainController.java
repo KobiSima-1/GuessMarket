@@ -27,6 +27,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
+import javafx.scene.control.Separator;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.Spinner;
@@ -654,7 +655,94 @@ public class MainController {
             actions.getChildren().addAll(tradeHeader, eventCombo, tradeControls);
         }
 
+        actions.getChildren().add(new Separator());
+        actions.getChildren().add(buildCreateEventForm(userName));
+
         return actions;
+    }
+
+    private VBox buildCreateEventForm(String creatorName) {
+        VBox form = new VBox(8);
+        Label header = new Label("Create a new event:");
+        header.setStyle("-fx-font-weight: bold;");
+
+        TextField nameField = new TextField();
+        nameField.setPromptText("Event name");
+        TextField descField = new TextField();
+        descField.setPromptText("Description");
+
+        Spinner<Integer> commissionSpinner = new Spinner<>(0, 90, 5);
+        commissionSpinner.setEditable(true);
+        ComboBox<String> commissionTypeCombo = new ComboBox<>(FXCollections.observableArrayList("on-close", "on-purchase"));
+        commissionTypeCombo.getSelectionModel().selectFirst();
+
+        TextField option1Field = new TextField();
+        option1Field.setPromptText("Option 1");
+        TextField option2Field = new TextField();
+        option2Field.setPromptText("Option 2");
+
+        ComboBox<String> methodCombo = new ComboBox<>(FXCollections.observableArrayList("LMSR", "Order Book"));
+        methodCombo.getSelectionModel().selectFirst();
+
+        VBox methodFields = new VBox(6);
+
+        Spinner<Integer> bSpinner = new Spinner<>(1, 1_000_000, 100);
+        bSpinner.setEditable(true);
+
+        Spinner<Integer> dSpinner = new Spinner<>(1, 1_000_000, 1);
+        dSpinner.setEditable(true);
+        Spinner<Integer> initialSpinner = new Spinner<>(0, 1_000_000, 100);
+        initialSpinner.setEditable(true);
+        CheckBox allowMintCheck = new CheckBox("Allow mint");
+
+        Runnable rebuildMethodFields = () -> {
+            methodFields.getChildren().clear();
+            if ("LMSR".equals(methodCombo.getValue())) {
+                methodFields.getChildren().add(new HBox(8, new Label("b:"), bSpinner));
+            } else {
+                HBox row = new HBox(8, new Label("d:"), dSpinner, new Label("Initial:"), initialSpinner, allowMintCheck);
+                row.setAlignment(Pos.CENTER_LEFT);
+                methodFields.getChildren().add(row);
+            }
+        };
+        rebuildMethodFields.run();
+        methodCombo.getSelectionModel().selectedItemProperty().addListener((obs, o, n) -> rebuildMethodFields.run());
+
+        Button createButton = new Button("Create event");
+        createButton.setOnAction(e -> {
+            List<String> optionNames = List.of(option1Field.getText(), option2Field.getText());
+            try {
+                int newId;
+                if ("LMSR".equals(methodCombo.getValue())) {
+                    newId = engine.createLmsrEvent(creatorName, nameField.getText(), descField.getText(),
+                            commissionSpinner.getValue(), commissionTypeCombo.getValue(), optionNames, bSpinner.getValue());
+                } else {
+                    newId = engine.createOrderBookEvent(creatorName, nameField.getText(), descField.getText(),
+                            commissionSpinner.getValue(), commissionTypeCombo.getValue(), optionNames,
+                            allowMintCheck.isSelected(), initialSpinner.getValue(), dSpinner.getValue());
+                }
+                refreshAfterAction();
+                showInfo("Event created", "Event #" + newId + " was created. You are its market maker.");
+                nameField.clear();
+                descField.clear();
+                option1Field.clear();
+                option2Field.clear();
+            } catch (RuntimeException ex) {
+                showError("Could not create the event", ex.getMessage());
+            }
+        });
+
+        HBox row1 = new HBox(8, new Label("Name:"), nameField, new Label("Description:"), descField);
+        row1.setAlignment(Pos.CENTER_LEFT);
+        HBox row2 = new HBox(8, new Label("Commission %:"), commissionSpinner, new Label("Type:"), commissionTypeCombo);
+        row2.setAlignment(Pos.CENTER_LEFT);
+        HBox row3 = new HBox(8, new Label("Option 1:"), option1Field, new Label("Option 2:"), option2Field);
+        row3.setAlignment(Pos.CENTER_LEFT);
+        HBox row4 = new HBox(8, new Label("Method:"), methodCombo);
+        row4.setAlignment(Pos.CENTER_LEFT);
+
+        form.getChildren().addAll(header, row1, row2, row3, row4, methodFields, createButton);
+        return form;
     }
 
     private HBox buildLmsrTradeForm(String userName, EventDto event) {

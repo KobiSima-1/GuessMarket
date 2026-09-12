@@ -7,6 +7,7 @@ import guessmarket.engine.dto.ParticipationDto;
 import guessmarket.engine.dto.TradeResultDto;
 import guessmarket.engine.dto.UserDto;
 import guessmarket.engine.exception.InvalidFileException;
+import guessmarket.engine.model.CommissionType;
 
 import java.util.List;
 
@@ -45,4 +46,11 @@ public interface GuessMarketEngine
     TradeResultDto submitOrder(String userName, int eventId, int optionIndex, String side, int quantity, double price);
 
     void closeEvent(String userName, int eventId, int optionIndex);
+
+
+    int createLmsrEvent(String creatorUserName, String name, String description, int commissionPercent,
+                        String commissionType, List<String> optionNames, int b);
+
+    int createOrderBookEvent(String creatorUserName, String name, String description, int commissionPercent,
+                             String commissionType, List<String> optionNames, boolean allowMint, int initial, int d);
 }

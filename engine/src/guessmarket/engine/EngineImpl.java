@@ -26,6 +26,7 @@ import guessmarket.engine.model.Trade;
 import guessmarket.engine.model.TradeResult;
 import guessmarket.engine.model.User;
 import guessmarket.engine.xml.MarketLoader;
+import guessmarket.engine.model.CommissionType;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -216,6 +217,59 @@ public class EngineImpl implements GuessMarketEngine
         requireEvent(eventId).close(requireUser(userName), optionIndex, market);
     }
 
+
+    @Override
+    public int createLmsrEvent(String creatorUserName, String name, String description, int commissionPercent,
+                               String commissionType, List<String> optionNames, int b)
+    {
+        checkLoaded();
+        User creator = requireUser(creatorUserName);
+        checkEventName(name);
+        checkCommissionPercent(commissionPercent);
+        CommissionType type = parseCommissionType(commissionType);
+        List<EventOption> options = buildNewOptions(optionNames);
+        if (b <= 0)
+        {
+            throw new InvalidRequestException("b must be a positive number");
+        }
+
+        int id = nextEventId();
+        Event event = new Event(id, name.trim(), description == null ? "" : description.trim(),
+                commissionPercent, type, options, new LmsrMethod(options, b));
+        event.setMarketMakerName(creatorUserName);
+        market.addEvent(event);
+        creator.addMarketMakerEvent(id);
+        return id;
+    }
+
+    @Override
+    public int createOrderBookEvent(String creatorUserName, String name, String description, int commissionPercent,
+                                    String commissionType, List<String> optionNames, boolean allowMint, int initial, int d)
+    {
+        checkLoaded();
+        User creator = requireUser(creatorUserName);
+        checkEventName(name);
+        checkCommissionPercent(commissionPercent);
+        CommissionType type = parseCommissionType(commissionType);
+        List<EventOption> options = buildNewOptions(optionNames);
+        if (d <= 0)
+        {
+            throw new InvalidRequestException("The base value (d) must be a positive number");
+        }
+        if (initial < 0)
+        {
+            throw new InvalidRequestException("The initial investment cannot be negative");
+        }
+
+        int id = nextEventId();
+        Event event = new Event(id, name.trim(), description == null ? "" : description.trim(),
+                commissionPercent, type, options, new OrderBookMethod(options, allowMint, initial, d));
+        event.setMarketMakerName(creatorUserName);
+        market.addEvent(event);
+        creator.addMarketMakerEvent(id);
+        return id;
+    }
+
     private EventDto toEventDto(Event event)
     {
         List<String> optionNames = new ArrayList<String>();
@@ -356,5 +410,68 @@ public class EngineImpl implements GuessMarketEngine
             throw new InvalidRequestException("There is no user named '" + userName + "' in the system");
         }
         return user;
+    }
+
+
+    private int nextEventId()
+    {
+        int max = 0;
+        for (Event event : market.getEvents())
+        {
+            max = Math.max(max, event.getId());
+        }
+        return max + 1;
+    }
+
+    private List<EventOption> buildNewOptions(List<String> optionNames)
+    {
+        if (optionNames == null || optionNames.size() != 2)
+        {
+            throw new InvalidRequestException("An event must have exactly 2 options");
+        }
+        List<EventOption> options = new ArrayList<>();
+        for (String rawName : optionNames)
+        {
+            String name = rawName == null ? "" : rawName.trim();
+            if (name.isEmpty())
+            {
+                throw new InvalidRequestException("Option names cannot be empty");
+            }
+            for (EventOption existing : options)
+            {
+                if (existing.getName().equalsIgnoreCase(name))
+                {
+                    throw new InvalidRequestException("The option '" + name + "' appears twice");
+                }
+            }
+            options.add(new EventOption(name));
+        }
+        return options;
+    }
+
+    private CommissionType parseCommissionType(String value)
+    {
+        CommissionType type = CommissionType.fromFileValue(value);
+        if (type == null)
+        {
+            throw new InvalidRequestException("Commission type must be 'on-close' or 'on-purchase'");
+        }
+        return type;
+    }
+
+    private void checkCommissionPercent(int percent)
+    {
+        if (percent < 0 || percent > 90)
+        {
+            throw new InvalidRequestException("Commission must be between 0 and 90");
+        }
+    }
+
+    private void checkEventName(String name)
+    {
+        if (name == null || name.trim().isEmpty())
+        {
+            throw new InvalidRequestException("The event needs a name");
+        }
     }
 }
