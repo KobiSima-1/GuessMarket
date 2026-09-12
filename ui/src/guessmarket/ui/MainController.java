@@ -12,6 +12,7 @@ import guessmarket.engine.dto.ParticipationDto;
 import guessmarket.engine.dto.TradeDto;
 import guessmarket.engine.dto.TradeResultDto;
 import guessmarket.engine.dto.UserDto;
+import javafx.animation.FadeTransition;
 import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -20,8 +21,10 @@ import javafx.concurrent.Task;
 import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceDialog;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
@@ -36,6 +39,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -55,6 +59,8 @@ public class MainController {
     @FXML private ProgressBar progressBar;
     @FXML private VBox eventsContainer;
     @FXML private VBox usersContainer;
+    @FXML private ComboBox<String> skinCombo;
+    @FXML private CheckBox animationsCheckBox;
 
     private GuessMarketEngine engine;
 
@@ -82,6 +88,39 @@ public class MainController {
     private void initialize() {
         buildEventsTab();
         buildUsersTab();
+
+        skinCombo.setItems(FXCollections.observableArrayList("Default", "Dark", "Sunset"));
+        skinCombo.getSelectionModel().selectFirst();
+        skinCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> applySkin(newVal));
+    }
+
+    // ----- skins (bonus, starts on "Default") -----
+
+    private void applySkin(String name) {
+        if (filePathLabel.getScene() == null) {
+            return;
+        }
+        ObservableList<String> stylesheets = filePathLabel.getScene().getStylesheets();
+        stylesheets.clear();
+        if ("Dark".equals(name)) {
+            stylesheets.add(getClass().getResource("/guessmarket/ui/skin-dark.css").toExternalForm());
+        } else if ("Sunset".equals(name)) {
+            stylesheets.add(getClass().getResource("/guessmarket/ui/skin-sunset.css").toExternalForm());
+        }
+    }
+
+    // ----- animations (bonus, starts disabled) -----
+
+    private void playFade(Node node, Duration duration) {
+        if (animationsCheckBox == null || !animationsCheckBox.isSelected()) {
+            node.setOpacity(1);
+            return;
+        }
+        node.setOpacity(0);
+        FadeTransition fade = new FadeTransition(duration, node);
+        fade.setFromValue(0);
+        fade.setToValue(1);
+        fade.play();
     }
 
     // ----- file loading -----
@@ -149,6 +188,9 @@ public class MainController {
 
         List<UserDto> users = engine.getAllUsers();
         usersData.setAll(users.stream().map(UserRow::new).collect(Collectors.toList()));
+
+        playFade(eventsContainer, Duration.millis(500));
+        playFade(usersContainer, Duration.millis(500));
 
         showInfo("File loaded", "The file is valid. The system now holds " + events.size() + " events.");
     }
@@ -278,11 +320,14 @@ public class MainController {
         if (selectedEventId == null) {
             return;
         }
+        VBox detail;
         if ("LMSR".equals(selectedEventMethod)) {
-            eventDetailPane.getChildren().add(buildLmsrDetail(selectedEventId));
+            detail = buildLmsrDetail(selectedEventId);
         } else {
-            eventDetailPane.getChildren().add(buildOrderBookDetail(selectedEventId));
+            detail = buildOrderBookDetail(selectedEventId);
         }
+        eventDetailPane.getChildren().add(detail);
+        playFade(eventDetailPane, Duration.millis(300));
     }
 
     private VBox buildLmsrDetail(int eventId) {
@@ -503,6 +548,7 @@ public class MainController {
         VBox actions = buildActionsSection(selectedUserName, user);
 
         userDetailPane.getChildren().addAll(header, mmLabel, partHeader, partsBox, actions);
+        playFade(userDetailPane, Duration.millis(300));
     }
 
     private VBox buildParticipationBlock(ParticipationDto participation) {

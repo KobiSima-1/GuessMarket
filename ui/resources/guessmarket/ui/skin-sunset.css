@@ -1,0 +1,20 @@
+.root {
+    -fx-base: #ffe0b2;
+    -fx-background-color: #fff3e0;
+    -fx-font-family: "Comic Sans MS", "Segoe Print", sans-serif;
+    -fx-font-size: 14px;
+}
+.label {
+    -fx-text-fill: #4e342e;
+}
+.button {
+    -fx-background-color: #ff8a65;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+}
+.table-row-cell {
+    -fx-background-color: #fff8f0;
+}
+.table-row-cell:odd {
+    -fx-background-color: #ffe8d6;
+}
