@@ -2,7 +2,14 @@ package guessmarket.ui;
 
 import guessmarket.engine.GuessMarketEngine;
 import guessmarket.engine.dto.EventDto;
-import guessmarket.engine.exception.InvalidFileException;
+import guessmarket.engine.dto.EventStateDto;
+import guessmarket.engine.dto.OptionBookDto;
+import guessmarket.engine.dto.OptionStateDto;
+import guessmarket.engine.dto.OrderBookStateDto;
+import guessmarket.engine.dto.OrderDto;
+import guessmarket.engine.dto.ParticipantDto;
+import guessmarket.engine.dto.TradeDto;
+import javafx.beans.property.ReadOnlyStringWrapper;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import javafx.collections.transformation.FilteredList;
@@ -17,8 +24,8 @@ import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
 import javafx.scene.control.ToggleButton;
+import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.HBox;
-import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -27,6 +34,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -45,6 +53,8 @@ public class MainController {
     private final List<ToggleButton> methodToggles = new ArrayList<>();
     private final List<ToggleButton> statusToggles = new ArrayList<>();
     private final List<ToggleButton> commissionToggles = new ArrayList<>();
+
+    private VBox detailPane;
 
     public void setEngine(GuessMarketEngine engine) {
         this.engine = engine;
@@ -109,6 +119,8 @@ public class MainController {
         loadButton.setDisable(false);
         filePathLabel.setText(file.getAbsolutePath());
 
+        detailPane.getChildren().clear();
+
         List<EventDto> events = engine.getAllEvents();
         eventsData.setAll(events.stream().map(EventRow::new).collect(Collectors.toList()));
 
@@ -136,7 +148,7 @@ public class MainController {
 
         TableView<EventRow> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        VBox.setVgrow(table, Priority.ALWAYS);
+        table.setPrefHeight(220);
 
         TableColumn<EventRow, String> nameCol = new TableColumn<>("Name");
         nameCol.setCellValueFactory(c -> c.getValue().nameProperty());
@@ -158,7 +170,13 @@ public class MainController {
         eventsFiltered = new FilteredList<>(eventsData, row -> true);
         table.setItems(eventsFiltered);
 
-        eventsContainer.getChildren().addAll(methodRow, statusRow, commissionRow, table);
+        detailPane = new VBox(10);
+        detailPane.setPadding(new Insets(10, 0, 0, 0));
+
+        table.getSelectionModel().selectedItemProperty()
+                .addListener((obs, oldRow, newRow) -> showEventDetails(newRow));
+
+        eventsContainer.getChildren().addAll(methodRow, statusRow, commissionRow, table, detailPane);
         eventsContainer.setSpacing(8);
         eventsContainer.setPadding(new Insets(10));
 
@@ -201,6 +219,170 @@ public class MainController {
             }
         }
         return result;
+    }
+
+    // ----- detail panel -----
+
+    private void showEventDetails(EventRow row) {
+        detailPane.getChildren().clear();
+        if (row == null) {
+            return;
+        }
+        if ("LMSR".equals(row.getMethodTypeRaw())) {
+            detailPane.getChildren().add(buildLmsrDetail(row.getId()));
+        } else {
+            detailPane.getChildren().add(buildOrderBookDetail(row.getId()));
+        }
+    }
+
+    private VBox buildLmsrDetail(int eventId) {
+        EventStateDto state = engine.getLmsrState(eventId);
+        VBox box = new VBox(6);
+
+        String title = state.getEventName() + " - LMSR";
+        if (state.getWinningOptionName() != null) {
+            title += "  (winner: " + state.getWinningOptionName() + ")";
+        }
+        Label header = new Label(title);
+        header.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+
+        Label summary = new Label(String.format(Locale.US,
+                "Event account: %.2f    Commission collected: %.2f    b: %d",
+                state.getAccountBalance(), state.getCollectedCommission(), state.getB()));
+
+        TableView<OptionStateDto> optionsTable = new TableView<>();
+        optionsTable.setPrefHeight(90);
+        TableColumn<OptionStateDto, String> optName = new TableColumn<>("Option");
+        optName.setCellValueFactory(new PropertyValueFactory<>("name"));
+        TableColumn<OptionStateDto, Number> optShares = new TableColumn<>("Shares bought");
+        optShares.setCellValueFactory(new PropertyValueFactory<>("shares"));
+        TableColumn<OptionStateDto, Number> optValue = new TableColumn<>("Current price");
+        optValue.setCellValueFactory(new PropertyValueFactory<>("value"));
+        optionsTable.getColumns().addAll(optName, optShares, optValue);
+        optionsTable.getItems().addAll(state.getOptions());
+
+        Label tradesHeader = new Label("Trade history (most recent first):");
+        TableView<TradeDto> tradesTable = new TableView<>();
+        tradesTable.setPrefHeight(140);
+        tradesTable.setPlaceholder(new Label("Nothing was bought in this event yet"));
+
+        TableColumn<TradeDto, String> tUser = new TableColumn<>("User");
+        tUser.setCellValueFactory(new PropertyValueFactory<>("userName"));
+        TableColumn<TradeDto, String> tOption = new TableColumn<>("Option");
+        tOption.setCellValueFactory(new PropertyValueFactory<>("optionName"));
+        TableColumn<TradeDto, Number> tQuantity = new TableColumn<>("Quantity");
+        tQuantity.setCellValueFactory(new PropertyValueFactory<>("quantity"));
+        TableColumn<TradeDto, Number> tAmount = new TableColumn<>("Amount paid");
+        tAmount.setCellValueFactory(new PropertyValueFactory<>("amount"));
+        TableColumn<TradeDto, Number> tCommission = new TableColumn<>("Commission");
+        tCommission.setCellValueFactory(new PropertyValueFactory<>("commission"));
+        tradesTable.getColumns().addAll(tUser, tOption, tQuantity, tAmount, tCommission);
+        tradesTable.getItems().addAll(state.getTrades());
+
+        box.getChildren().addAll(header, summary, optionsTable, tradesHeader, tradesTable);
+        return box;
+    }
+
+    private VBox buildOrderBookDetail(int eventId) {
+        OrderBookStateDto state = engine.getOrderBookState(eventId);
+        VBox box = new VBox(10);
+
+        String title = state.getEventName() + " - Order Book";
+        if (state.getWinningOptionName() != null) {
+            title += "  (winner: " + state.getWinningOptionName() + ")";
+        }
+        Label header = new Label(title);
+        header.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+
+        Label summary = new Label(String.format(Locale.US,
+                "Event account: %.2f    Base value (d): %d    Mint allowed: %s    Commission collected: %.2f",
+                state.getAccountBalance(), state.getBaseValue(), state.isMintAllowed(), state.getCollectedCommission()));
+
+        box.getChildren().addAll(header, summary);
+
+        for (OptionBookDto optionBook : state.getBooks()) {
+            box.getChildren().add(buildOptionBookBlock(optionBook));
+        }
+
+        Label participantsHeader = new Label("Participants:");
+        TableView<ParticipantDto> participantsTable = new TableView<>();
+        participantsTable.setPrefHeight(120);
+
+        TableColumn<ParticipantDto, String> pUser = new TableColumn<>("User");
+        pUser.setCellValueFactory(c -> new ReadOnlyStringWrapper(c.getValue().getUserName()));
+        TableColumn<ParticipantDto, String> pHoldings = new TableColumn<>("Holdings");
+        pHoldings.setCellValueFactory(c -> new ReadOnlyStringWrapper(formatHoldings(c.getValue(), state.getBooks())));
+        TableColumn<ParticipantDto, String> pCommission = new TableColumn<>("Commission paid");
+        pCommission.setCellValueFactory(c -> new ReadOnlyStringWrapper(
+                String.format(Locale.US, "%.2f", c.getValue().getCommissionPaid())));
+        participantsTable.getColumns().addAll(pUser, pHoldings, pCommission);
+        participantsTable.getItems().addAll(state.getParticipants());
+
+        box.getChildren().addAll(participantsHeader, participantsTable);
+        return box;
+    }
+
+    private VBox buildOptionBookBlock(OptionBookDto book) {
+        VBox optionBox = new VBox(4);
+
+        Label optionHeader = new Label(book.getOptionName() + "  (shares outstanding: " + book.getTotalShares() + ")");
+        optionHeader.setStyle("-fx-font-weight: bold;");
+
+        Label stats = new Label(String.format(Locale.US,
+                "LAST: %s    BID: %s    ASK: %s    MID: %s    SPREAD: %s",
+                fmtPrice(book.getLastPrice()), fmtPrice(book.getBestBid()), fmtPrice(book.getBestAsk()),
+                fmtPrice(book.getMidPrice()), fmtPrice(book.getSpread())));
+
+        TableView<OrderDto> bidsTable = buildOrdersTable();
+        bidsTable.getItems().addAll(book.getBids());
+        TableView<OrderDto> asksTable = buildOrdersTable();
+        asksTable.getItems().addAll(book.getAsks());
+
+        HBox tablesRow = new HBox(12,
+                buildLabeledBox("Bids", bidsTable),
+                buildLabeledBox("Asks", asksTable));
+
+        optionBox.getChildren().addAll(optionHeader, stats, tablesRow);
+        return optionBox;
+    }
+
+    private TableView<OrderDto> buildOrdersTable() {
+        TableView<OrderDto> table = new TableView<>();
+        table.setPrefHeight(110);
+        table.setPrefWidth(280);
+
+        TableColumn<OrderDto, String> userCol = new TableColumn<>("User");
+        userCol.setCellValueFactory(new PropertyValueFactory<>("userName"));
+        TableColumn<OrderDto, Number> qtyCol = new TableColumn<>("Qty");
+        qtyCol.setCellValueFactory(new PropertyValueFactory<>("quantity"));
+        TableColumn<OrderDto, Number> priceCol = new TableColumn<>("Price");
+        priceCol.setCellValueFactory(new PropertyValueFactory<>("price"));
+
+        table.getColumns().addAll(userCol, qtyCol, priceCol);
+        return table;
+    }
+
+    private VBox buildLabeledBox(String label, TableView<?> table) {
+        VBox box = new VBox(4);
+        box.getChildren().addAll(new Label(label), table);
+        return box;
+    }
+
+    private String formatHoldings(ParticipantDto participant, List<OptionBookDto> books) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < books.size(); i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            int shares = participant.getShares().get(i);
+            double paid = participant.getNetPaid().get(i);
+            sb.append(String.format(Locale.US, "%s: %d (paid %.2f)", books.get(i).getOptionName(), shares, paid));
+        }
+        return sb.toString();
+    }
+
+    private String fmtPrice(double value) {
+        return value < 0 ? "-" : String.format(Locale.US, "%.2f", value);
     }
 
     // ----- alerts -----

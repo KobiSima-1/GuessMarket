@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
+<?import javafx.scene.control.ScrollPane?>
 <?import javafx.geometry.Insets?>
 <?import javafx.scene.control.Button?>
 <?import javafx.scene.control.Label?>
@@ -33,7 +34,9 @@
     <center>
         <TabPane tabClosingPolicy="UNAVAILABLE">
             <Tab text="Events">
-                <VBox fx:id="eventsContainer"/>
+                <ScrollPane fitToWidth="true">
+                    <VBox fx:id="eventsContainer"/>
+                </ScrollPane>
             </Tab>
             <Tab text="Users">
                 <Label text="Load a file to see users" style="-fx-padding: 20;"/>
