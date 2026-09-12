@@ -39,7 +39,9 @@
                 </ScrollPane>
             </Tab>
             <Tab text="Users">
-                <Label text="Load a file to see users" style="-fx-padding: 20;"/>
+                <ScrollPane fitToWidth="true">
+                    <VBox fx:id="usersContainer"/>
+                </ScrollPane>
             </Tab>
         </TabPane>
     </center>
