@@ -4,8 +4,12 @@ import guessmarket.engine.model.EventOption;
 
 import java.util.List;
 
-public class LmsrMethod extends TradingMethod {
+public class LmsrMethod extends TradingMethod
+{
     private static final long serialVersionUID = 1L;
+
+    public static final String TYPE_NAME = "LMSR";
+    private static final double WINNING_SHARE_VALUE = 1.0;
 
     private final int b;
 
@@ -15,12 +19,29 @@ public class LmsrMethod extends TradingMethod {
         this.b = b;
     }
 
-    public int getB() 
+    public int getB()
     {
         return b;
     }
 
     @Override
+    public String getTypeName()
+    {
+        return TYPE_NAME;
+    }
+
+    @Override
+    public double getInitialInvestment()
+    {
+        return costOf(new int[getOptions().size()]);
+    }
+
+    @Override
+    public double getWinningShareValue()
+    {
+        return WINNING_SHARE_VALUE;
+    }
+
     public double getOptionValue(int optionIndex)
     {
         int[] quantities = currentQuantities();
@@ -28,7 +49,6 @@ public class LmsrMethod extends TradingMethod {
         return weightOf(quantities[optionIndex], max) / sumOfWeights(quantities, max);
     }
 
-    @Override
     public double getBuyCost(int optionIndex, int quantity)
     {
         int[] before = currentQuantities();
@@ -37,23 +57,18 @@ public class LmsrMethod extends TradingMethod {
         return costOf(after) - costOf(before);
     }
 
-    @Override
-    public double getInitialSubsidy() 
-    {
-        return costOf(new int[getOptions().size()]);
-    }
-
-    private int[] currentQuantities() 
+    private int[] currentQuantities()
     {
         List<EventOption> options = getOptions();
         int[] quantities = new int[options.size()];
-        for (int i = 0; i < options.size(); i++) {
+        for (int i = 0; i < options.size(); i++)
+        {
             quantities[i] = options.get(i).getSharesBought();
         }
         return quantities;
     }
 
-    private double costOf(int[] quantities) 
+    private double costOf(int[] quantities)
     {
         int max = findMax(quantities);
         return max + b * Math.log(sumOfWeights(quantities, max));
@@ -62,14 +77,14 @@ public class LmsrMethod extends TradingMethod {
     private double sumOfWeights(int[] quantities, int max)
     {
         double sum = 0;
-        for (int quantity : quantities) 
+        for (int quantity : quantities)
         {
             sum += weightOf(quantity, max);
         }
         return sum;
     }
 
-    private double weightOf(int quantity, int max) 
+    private double weightOf(int quantity, int max)
     {
         return Math.exp((quantity - max) / (double) b);
     }
@@ -78,11 +93,11 @@ public class LmsrMethod extends TradingMethod {
     {
         int max = quantities[0];
         for (int quantity : quantities)
+        {
+            if (quantity > max)
             {
-                if (quantity > max) 
-                {
-                    max = quantity;
-                }
+                max = quantity;
+            }
         }
         return max;
     }

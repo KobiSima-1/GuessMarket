@@ -1,29 +1,30 @@
 package guessmarket.engine.dto;
 
-public class OptionStateDto {
+public class OptionStateDto
+{
     private final String name;
+    private final int shares;
     private final double value;
-    private final int sharesBought;
 
-    public OptionStateDto(String name, double value, int sharesBought) 
+    public OptionStateDto(String name, int shares, double value)
     {
         this.name = name;
+        this.shares = shares;
         this.value = value;
-        this.sharesBought = sharesBought;
     }
 
-    public String getName() 
+    public String getName()
     {
         return name;
     }
 
-    public double getValue() 
+    public int getShares()
     {
-        return value;
+        return shares;
     }
 
-    public int getSharesBought()
+    public double getValue()
     {
-        return sharesBought;
+        return value;
     }
 }

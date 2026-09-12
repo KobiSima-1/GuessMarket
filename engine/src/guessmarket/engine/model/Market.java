@@ -2,16 +2,21 @@ package guessmarket.engine.model;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-public class Market implements Serializable {
+public class Market implements Serializable, UserLookup
+{
     private static final long serialVersionUID = 1L;
 
     private final List<Event> events;
+    private final Map<String, User> users;
 
-    public Market() 
+    public Market()
     {
         events = new ArrayList<Event>();
+        users = new LinkedHashMap<String, User>();
     }
 
     public void addEvent(Event event)
@@ -19,28 +24,15 @@ public class Market implements Serializable {
         events.add(event);
     }
 
-    public List<Event> getEvents() 
+    public List<Event> getEvents()
     {
         return events;
     }
 
-    public List<Event> getActiveEvents()
-    {
-        List<Event> activeEvents = new ArrayList<Event>();
-        for (Event event : events) 
-        {
-            if (event.isActive()) 
-            {
-                activeEvents.add(event);
-            }
-        }
-        return activeEvents;
-    }
-
-    public Event findById(int id) 
+    public Event findById(int id)
     {
         for (Event event : events)
-            {
+        {
             if (event.getId() == id)
             {
                 return event;
@@ -49,8 +41,29 @@ public class Market implements Serializable {
         return null;
     }
 
-    public boolean containsId(int id) 
+    public boolean containsId(int id)
     {
         return findById(id) != null;
+    }
+
+    public void addUser(User user)
+    {
+        users.put(user.getName(), user);
+    }
+
+    public List<User> getUsers()
+    {
+        return new ArrayList<User>(users.values());
+    }
+
+    public boolean containsUser(String name)
+    {
+        return users.containsKey(name);
+    }
+
+    @Override
+    public User find(String name)
+    {
+        return users.get(name);
     }
 }

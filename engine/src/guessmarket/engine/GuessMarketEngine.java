@@ -2,30 +2,47 @@ package guessmarket.engine;
 
 import guessmarket.engine.dto.EventDto;
 import guessmarket.engine.dto.EventStateDto;
-import guessmarket.engine.dto.PurchaseResultDto;
+import guessmarket.engine.dto.OrderBookStateDto;
+import guessmarket.engine.dto.ParticipationDto;
+import guessmarket.engine.dto.TradeResultDto;
+import guessmarket.engine.dto.UserDto;
 import guessmarket.engine.exception.InvalidFileException;
-import guessmarket.engine.exception.StateFileException;
 
 import java.util.List;
 
-public interface GuessMarketEngine 
+/**
+ * The whole api of the system. The ui talks only through this interface and
+ * only with dto objects - it never sees the engine model itself.
+ */
+public interface GuessMarketEngine
 {
-
     void loadEventsFile(String path) throws InvalidFileException;
 
     boolean isFileLoaded();
 
+    String getLoadedFilePath();
+
     List<EventDto> getAllEvents();
 
-    List<EventDto> getActiveEvents();
+    EventDto getEvent(int eventId);
 
-    EventStateDto getEventState(int eventId);
+    EventStateDto getLmsrState(int eventId);
 
-    PurchaseResultDto buyShares(int eventId, int optionIndex, int quantity);
+    OrderBookStateDto getOrderBookState(int eventId);
 
-    void closeEvent(int eventId, int optionIndex);
+    List<UserDto> getAllUsers();
 
-    void saveState(String path) throws StateFileException;
+    UserDto getUser(String userName);
 
-    void loadState(String path) throws StateFileException;
+    List<ParticipationDto> getParticipations(String userName);
+
+    ParticipationDto getParticipation(String userName, int eventId);
+
+    void openEvent(String userName, int eventId);
+
+    TradeResultDto buyShares(String userName, int eventId, int optionIndex, int quantity);
+
+    TradeResultDto submitOrder(String userName, int eventId, int optionIndex, String side, int quantity, double price);
+
+    void closeEvent(String userName, int eventId, int optionIndex);
 }

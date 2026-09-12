@@ -2,7 +2,8 @@ package guessmarket.engine.model;
 
 import java.io.Serializable;
 
-public class Account implements Serializable {
+public class Account implements Serializable
+{
     private static final long serialVersionUID = 1L;
 
     private double balance;
@@ -12,9 +13,14 @@ public class Account implements Serializable {
         balance = initialBalance;
     }
 
-    public double getBalance() 
+    public double getBalance()
     {
         return balance;
+    }
+
+    public boolean canAfford(double amount)
+    {
+        return balance >= amount;
     }
 
     public void deposit(double amount)
@@ -22,7 +28,7 @@ public class Account implements Serializable {
         balance += amount;
     }
 
-    public void withdraw(double amount) 
+    public void withdraw(double amount)
     {
         balance -= amount;
     }

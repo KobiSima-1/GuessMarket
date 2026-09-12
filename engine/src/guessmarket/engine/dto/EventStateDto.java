@@ -2,41 +2,44 @@ package guessmarket.engine.dto;
 
 import java.util.List;
 
-public class EventStateDto {
+public class EventStateDto
+{
     private final int eventId;
     private final String eventName;
-    private final List<OptionStateDto> options;
+    private final String status;
     private final double accountBalance;
     private final double collectedCommission;
+    private final int b;
+    private final List<OptionStateDto> options;
     private final List<TradeDto> trades;
-    private final boolean closed;
     private final String winningOptionName;
 
-    public EventStateDto(int eventId, String eventName, List<OptionStateDto> options, double accountBalance, double collectedCommission, List<TradeDto> trades, boolean closed, String winningOptionName)
+    public EventStateDto(int eventId, String eventName, String status, double accountBalance, double collectedCommission, int b, List<OptionStateDto> options, List<TradeDto> trades, String winningOptionName)
     {
         this.eventId = eventId;
         this.eventName = eventName;
-        this.options = options;
+        this.status = status;
         this.accountBalance = accountBalance;
         this.collectedCommission = collectedCommission;
+        this.b = b;
+        this.options = options;
         this.trades = trades;
-        this.closed = closed;
         this.winningOptionName = winningOptionName;
     }
 
-    public int getEventId() 
+    public int getEventId()
     {
         return eventId;
     }
 
-    public String getEventName() 
+    public String getEventName()
     {
         return eventName;
     }
 
-    public List<OptionStateDto> getOptions()
+    public String getStatus()
     {
-        return options;
+        return status;
     }
 
     public double getAccountBalance()
@@ -44,9 +47,19 @@ public class EventStateDto {
         return accountBalance;
     }
 
-    public double getCollectedCommission() 
+    public double getCollectedCommission()
     {
         return collectedCommission;
+    }
+
+    public int getB()
+    {
+        return b;
+    }
+
+    public List<OptionStateDto> getOptions()
+    {
+        return options;
     }
 
     public List<TradeDto> getTrades()
@@ -54,12 +67,8 @@ public class EventStateDto {
         return trades;
     }
 
-    public boolean isClosed() 
+    public String getWinningOptionName()
     {
-        return closed;
-    }
-
-    public String getWinningOptionName() {
         return winningOptionName;
     }
 }
