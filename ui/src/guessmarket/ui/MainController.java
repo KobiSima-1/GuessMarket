@@ -83,6 +83,7 @@ public class MainController {
     private Integer selectedEventId;
     private String selectedEventMethod;
     private String selectedUserName;
+    private Integer selectedUserEventId;
 
     public void setEngine(GuessMarketEngine engine) {
         this.engine = engine;
@@ -388,9 +389,13 @@ public class MainController {
 
         box.getChildren().addAll(header, summary);
 
+        HBox optionsRow = new HBox(12);
         for (OptionBookDto optionBook : state.getBooks()) {
-            box.getChildren().add(buildOptionBookBlock(optionBook));
+            VBox block = buildOptionBookBlock(optionBook);
+            HBox.setHgrow(block, Priority.ALWAYS);
+            optionsRow.getChildren().add(block);
         }
+        box.getChildren().add(optionsRow);
 
         Label participantsHeader = new Label("Participants:");
         TableView<ParticipantDto> participantsTable = new TableView<>();
@@ -426,11 +431,11 @@ public class MainController {
         TableView<OrderDto> asksTable = buildOrdersTable();
         asksTable.getItems().addAll(book.getAsks());
 
-        HBox tablesRow = new HBox(12,
+        VBox tablesColumn = new VBox(8,
                 buildLabeledBox("Bids", bidsTable),
                 buildLabeledBox("Asks", asksTable));
 
-        optionBox.getChildren().addAll(optionHeader, stats, tablesRow);
+        optionBox.getChildren().addAll(optionHeader, stats, tablesColumn);
         return optionBox;
     }
 
@@ -555,27 +560,122 @@ public class MainController {
                 user.getName(), user.getBalance(), user.isBlocked() ? "Yes" : "No"));
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
 
-        String mmText = user.getMarketMakerEventIds().isEmpty()
-                ? "None"
-                : user.getMarketMakerEventIds().stream()
-                .map(id -> engine.getEvent(id).getName() + " (#" + id + ")")
-                .collect(Collectors.joining(", "));
-        Label mmLabel = new Label("Market maker of: " + mmText);
+        Label involvementHeader = new Label("Events participation / ownership:");
+        involvementHeader.setStyle("-fx-font-weight: bold;");
 
-        List<ParticipationDto> participations = engine.getParticipations(selectedUserName);
-        Label partHeader = new Label("Participating in " + participations.size() + " event(s):");
+        TableView<EventInvolvementRow> involvementTable = buildInvolvementTable(user);
 
-        VBox partsBox = new VBox(12);
-        for (ParticipationDto participation : participations) {
-            partsBox.getChildren().add(buildParticipationBlock(participation));
+        VBox singleEventBox = new VBox(10);
+        singleEventBox.setPadding(new Insets(10, 0, 0, 0));
+
+        involvementTable.getSelectionModel().selectedItemProperty().addListener((obs, oldRow, newRow) -> {
+            selectedUserEventId = newRow == null ? null : newRow.getEventId();
+            singleEventBox.getChildren().clear();
+            if (newRow != null) {
+                singleEventBox.getChildren().add(buildSingleEventPanel(selectedUserName, newRow.getEventId()));
+                playFade(singleEventBox, Duration.millis(300));
+            }
+        });
+
+        if (selectedUserEventId != null) {
+            for (EventInvolvementRow row : involvementTable.getItems()) {
+                if (row.getEventId() == selectedUserEventId) {
+                    involvementTable.getSelectionModel().select(row);
+                    break;
+                }
+            }
         }
 
-        VBox actions = buildActionsSection(selectedUserName, user);
-
-        userDetailPane.getChildren().addAll(header, mmLabel, partHeader, partsBox, actions);
+        userDetailPane.getChildren().addAll(header, involvementHeader, involvementTable, singleEventBox,
+                new Separator(), buildCreateEventForm(selectedUserName));
         playFade(userDetailPane, Duration.millis(300));
     }
 
+    private TableView<EventInvolvementRow> buildInvolvementTable(UserDto user) {
+        Set<Integer> mmIds = new HashSet<>(user.getMarketMakerEventIds());
+        Set<Integer> participatingIds = new HashSet<>(user.getParticipatingEventIds());
+
+        List<EventInvolvementRow> rows = new ArrayList<>();
+        for (EventDto event : engine.getAllEvents()) {
+            boolean isMM = mmIds.contains(event.getId());
+            boolean isParticipant = participatingIds.contains(event.getId());
+            String role;
+            if (isMM && isParticipant) {
+                role = "Market maker + participant";
+            } else if (isMM) {
+                role = "Market maker";
+            } else if (isParticipant) {
+                role = "Participant";
+            } else if ("Active".equals(event.getStatus())) {
+                role = "Not yet involved";
+            } else {
+                continue;
+            }
+            rows.add(new EventInvolvementRow(event.getId(), event.getName(), role, event.getMethodType(), event.getStatus()));
+        }
+
+        TableView<EventInvolvementRow> table = new TableView<>();
+        table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
+        table.setPrefHeight(140);
+        table.setPlaceholder(new Label("Not involved in any event yet"));
+
+        TableColumn<EventInvolvementRow, String> nameCol = new TableColumn<>("Event");
+        nameCol.setCellValueFactory(c -> c.getValue().nameProperty());
+        TableColumn<EventInvolvementRow, String> roleCol = new TableColumn<>("Role");
+        roleCol.setCellValueFactory(c -> c.getValue().roleProperty());
+        TableColumn<EventInvolvementRow, String> methodCol = new TableColumn<>("Method");
+        methodCol.setCellValueFactory(c -> c.getValue().methodTypeProperty());
+        TableColumn<EventInvolvementRow, String> statusCol = new TableColumn<>("Status");
+        statusCol.setCellValueFactory(c -> c.getValue().statusProperty());
+        table.getColumns().addAll(nameCol, roleCol, methodCol, statusCol);
+        table.getItems().addAll(rows);
+
+        return table;
+    }
+
+    private VBox buildSingleEventPanel(String userName, int eventId) {
+        EventDto event = engine.getEvent(eventId);
+        VBox box = new VBox(10);
+
+        Label header = new Label("Single event details and trade:");
+        header.setStyle("-fx-font-weight: bold;");
+        box.getChildren().add(header);
+
+        if ("LMSR".equals(event.getMethodType())) {
+            box.getChildren().add(buildLmsrDetail(eventId));
+        } else {
+            box.getChildren().add(buildOrderBookDetail(eventId));
+        }
+
+        ParticipationDto participation = engine.getParticipation(userName, eventId);
+        if (participation != null) {
+            Label mineHeader = new Label("Your participation:");
+            mineHeader.setStyle("-fx-font-weight: bold;");
+            box.getChildren().addAll(mineHeader, buildParticipationBlock(participation));
+        }
+
+        boolean isMM = engine.getUser(userName).getMarketMakerEventIds().contains(eventId);
+        if (isMM) {
+            if ("Not started".equals(event.getStatus())) {
+                Button openButton = new Button("Open event");
+                openButton.setOnAction(e -> handleOpenEvent(userName, eventId));
+                box.getChildren().add(openButton);
+            } else if ("Active".equals(event.getStatus())) {
+                Button closeButton = new Button("Close event");
+                closeButton.setOnAction(e -> handleCloseEvent(userName, eventId));
+                box.getChildren().add(closeButton);
+            }
+        }
+
+        if ("Active".equals(event.getStatus())) {
+            HBox form = "LMSR".equals(event.getMethodType())
+                    ? buildLmsrTradeForm(userName, event)
+                    : buildOrderBookTradeForm(userName, event);
+            box.getChildren().add(form);
+        }
+
+        return box;
+    }
     private VBox buildParticipationBlock(ParticipationDto participation) {
         VBox box = new VBox(6);
 
@@ -621,69 +721,6 @@ public class MainController {
     }
 
     // ----- trading actions -----
-
-    private VBox buildActionsSection(String userName, UserDto user) {
-        VBox actions = new VBox(8);
-        Label header = new Label("Actions:");
-        header.setStyle("-fx-font-weight: bold;");
-        actions.getChildren().add(header);
-
-        for (Integer eventId : user.getMarketMakerEventIds()) {
-            EventDto event = engine.getEvent(eventId);
-            HBox row = new HBox(8);
-            row.setAlignment(Pos.CENTER_LEFT);
-            row.getChildren().add(new Label(event.getName() + " (#" + eventId + ") - " + event.getStatus()));
-
-            if ("Not started".equals(event.getStatus())) {
-                Button openButton = new Button("Open event");
-                openButton.setOnAction(e -> handleOpenEvent(userName, eventId));
-                row.getChildren().add(openButton);
-            } else if ("Active".equals(event.getStatus())) {
-                Button closeButton = new Button("Close event");
-                closeButton.setOnAction(e -> handleCloseEvent(userName, eventId));
-                row.getChildren().add(closeButton);
-            }
-            actions.getChildren().add(row);
-        }
-
-        List<EventDto> activeEvents = engine.getAllEvents().stream()
-                .filter(ev -> "Active".equals(ev.getStatus()))
-                .collect(Collectors.toList());
-
-        if (!activeEvents.isEmpty()) {
-            Map<String, EventDto> lookup = new HashMap<>();
-            List<String> labels = new ArrayList<>();
-            for (EventDto ev : activeEvents) {
-                String label = ev.getName() + " (#" + ev.getId() + ")";
-                labels.add(label);
-                lookup.put(label, ev);
-            }
-
-            Label tradeHeader = new Label("Trade in an active event:");
-            ComboBox<String> eventCombo = new ComboBox<>(FXCollections.observableArrayList(labels));
-            VBox tradeControls = new VBox(8);
-
-            eventCombo.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-                tradeControls.getChildren().clear();
-                if (newVal == null) {
-                    return;
-                }
-                EventDto event = lookup.get(newVal);
-                if ("LMSR".equals(event.getMethodType())) {
-                    tradeControls.getChildren().add(buildLmsrTradeForm(userName, event));
-                } else {
-                    tradeControls.getChildren().add(buildOrderBookTradeForm(userName, event));
-                }
-            });
-
-            actions.getChildren().addAll(tradeHeader, eventCombo, tradeControls);
-        }
-
-        actions.getChildren().add(new Separator());
-        actions.getChildren().add(buildCreateEventForm(userName));
-
-        return actions;
-    }
 
     private VBox buildCreateEventForm(String creatorName) {
         VBox form = new VBox(8);
