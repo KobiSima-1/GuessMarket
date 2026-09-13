@@ -30,6 +30,8 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Separator;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.ScrollPane;
+import javafx.scene.control.SplitPane;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.TableColumn;
 import javafx.scene.control.TableView;
@@ -37,6 +39,7 @@ import javafx.scene.control.TextField;
 import javafx.scene.control.ToggleButton;
 import javafx.scene.control.cell.PropertyValueFactory;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -232,10 +235,11 @@ public class MainController {
         HBox methodRow = buildToggleRow("Method", new String[]{"LMSR", "Order Book"}, methodToggles);
         HBox statusRow = buildToggleRow("Status", new String[]{"Not started", "Active", "Closed"}, statusToggles);
         HBox commissionRow = buildToggleRow("Commission", new String[]{"on-close", "on-purchase"}, commissionToggles);
+        VBox filterBox = new VBox(6, methodRow, statusRow, commissionRow);
 
         TableView<EventRow> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setPrefHeight(220);
+        VBox.setVgrow(table, Priority.ALWAYS);
 
         TableColumn<EventRow, String> nameCol = new TableColumn<>("Name");
         nameCol.setCellValueFactory(c -> c.getValue().nameProperty());
@@ -258,7 +262,17 @@ public class MainController {
         table.setItems(eventsFiltered);
 
         eventDetailPane = new VBox(10);
-        eventDetailPane.setPadding(new Insets(10, 0, 0, 0));
+        eventDetailPane.setPadding(new Insets(10));
+
+        ScrollPane detailScroll = new ScrollPane(eventDetailPane);
+        detailScroll.setFitToWidth(true);
+
+        VBox leftPane = new VBox(table);
+        VBox.setVgrow(leftPane, Priority.ALWAYS);
+
+        SplitPane splitPane = new SplitPane(leftPane, detailScroll);
+        splitPane.setDividerPositions(0.45);
+        VBox.setVgrow(splitPane, Priority.ALWAYS);
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldRow, newRow) -> {
             eventDetailPane.getChildren().clear();
@@ -272,7 +286,7 @@ public class MainController {
             renderEventDetail();
         });
 
-        eventsContainer.getChildren().addAll(methodRow, statusRow, commissionRow, table, eventDetailPane);
+        eventsContainer.getChildren().addAll(filterBox, splitPane);
         eventsContainer.setSpacing(8);
         eventsContainer.setPadding(new Insets(10));
 
@@ -496,7 +510,7 @@ public class MainController {
     private void buildUsersTab() {
         TableView<UserRow> table = new TableView<>();
         table.setColumnResizePolicy(TableView.CONSTRAINED_RESIZE_POLICY);
-        table.setPrefHeight(180);
+        VBox.setVgrow(table, Priority.ALWAYS);
 
         TableColumn<UserRow, String> nameCol = new TableColumn<>("Name");
         nameCol.setCellValueFactory(c -> c.getValue().nameProperty());
@@ -508,7 +522,17 @@ public class MainController {
         table.setItems(usersData);
 
         userDetailPane = new VBox(10);
-        userDetailPane.setPadding(new Insets(10, 0, 0, 0));
+        userDetailPane.setPadding(new Insets(10));
+
+        ScrollPane detailScroll = new ScrollPane(userDetailPane);
+        detailScroll.setFitToWidth(true);
+
+        VBox leftPane = new VBox(table);
+        VBox.setVgrow(leftPane, Priority.ALWAYS);
+
+        SplitPane splitPane = new SplitPane(leftPane, detailScroll);
+        splitPane.setDividerPositions(0.4);
+        VBox.setVgrow(splitPane, Priority.ALWAYS);
 
         table.getSelectionModel().selectedItemProperty().addListener((obs, oldRow, newRow) -> {
             userDetailPane.getChildren().clear();
@@ -516,7 +540,7 @@ public class MainController {
             renderUserDetail();
         });
 
-        usersContainer.getChildren().addAll(table, userDetailPane);
+        usersContainer.getChildren().add(splitPane);
         usersContainer.setSpacing(8);
         usersContainer.setPadding(new Insets(10));
     }

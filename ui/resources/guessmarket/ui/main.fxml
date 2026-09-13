@@ -39,12 +39,12 @@
     <center>
         <TabPane tabClosingPolicy="UNAVAILABLE">
             <Tab text="Events">
-                <ScrollPane fitToWidth="true">
+                <ScrollPane fitToWidth="true" fitToHeight="true">
                     <VBox fx:id="eventsContainer"/>
                 </ScrollPane>
             </Tab>
             <Tab text="Users">
-                <ScrollPane fitToWidth="true">
+                <ScrollPane fitToWidth="true" fitToHeight="true">
                     <VBox fx:id="usersContainer"/>
                 </ScrollPane>
             </Tab>
